@@ -24,8 +24,6 @@ class _DevicesScreenState extends State<DevicesScreen> {
   bool _serverConnected = false;
   Timer? _ticker;
 
-  Map<String, DeviceState> get _devices => _devicesNotifier.value;
-
   void _updateDevices(void Function(Map<String, DeviceState> m) fn) {
     final m = Map<String, DeviceState>.from(_devicesNotifier.value);
     fn(m);
