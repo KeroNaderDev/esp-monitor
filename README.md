@@ -187,6 +187,7 @@ flutter run
 
 - Set `serverUrl` in `lib/main.dart` (defaults to the live server above)
 - Add the permissions from `android_permissions_snippet.xml` to `android/app/src/main/AndroidManifest.xml`
+- Apply `android_desugaring_snippet.kts` to `android/app/build.gradle.kts` (required by `flutter_local_notifications`)
 - Alert thresholds live in `lib/models/device_state.dart`: temp 28–32 °C, humidity 60–70%
 
 > `DevicesScreen` owns a `ValueNotifier<Map<String, DeviceState>>` shared with
