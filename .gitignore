@@ -1,2 +1,30 @@
+# Node
 node_modules/
+npm-debug.log*
+npm-debug.log
+yarn-error.log
+
+# Env
 .env
+.env.local
+
+# Flutter / Dart
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+build/
+*.iml
+.idea/
+.vscode/
+
+# Arduino build artifacts
+*.hex
+*.elf
+*.bin
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Railway
+.railway/
