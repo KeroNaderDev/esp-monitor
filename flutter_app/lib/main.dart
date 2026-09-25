@@ -10,7 +10,7 @@ class EspMonitorApp extends StatelessWidget {
   const EspMonitorApp({super.key});
 
   // ⚠️ غيّر الرابط
-  static const String serverUrl = 'https://your-app.up.railway.app';
+  static const String serverUrl = 'https://esp-monitor-production.up.railway.app';
 
   @override
   Widget build(BuildContext context) {

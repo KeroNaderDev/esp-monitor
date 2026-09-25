@@ -14,7 +14,7 @@ const char* ssid     = "Devoz phone";
 const char* password = "devo1234";
 
 // ===== السيرفر =====
-const char* serverURL = "https://your-app.up.railway.app/api/data";
+const char* serverURL = "https://esp-monitor-production.up.railway.app/api/data";
 
 // ⚠️ غيّر ده في كل ESP
 // ESP الأول:   "esp01_room"
