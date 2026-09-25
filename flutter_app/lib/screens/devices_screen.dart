@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import '../models/device_state.dart';
 import '../services/sse_service.dart';
 import '../services/notification_service.dart';
+import '../services/prefs_service.dart';
+import '../services/audio_service.dart';
 import '../theme/app_theme.dart';
 import 'device_detail_screen.dart';
+import 'device_settings_screen.dart';
 
 class DevicesScreen extends StatefulWidget {
   final String serverUrl;
@@ -21,6 +24,9 @@ class _DevicesScreenState extends State<DevicesScreen> {
   final ValueNotifier<Map<String, DeviceState>> _devicesNotifier =
       ValueNotifier({});
   final Map<String, bool> _previousOnline = {};
+  final Map<String, bool> _wasOutOfRange = {};
+  final Map<String, int> _lastAlertMs = {};
+  static const int _repeatIntervalMs = 10 * 60 * 1000;
 
   bool _serverConnected = false;
   Timer? _ticker;
@@ -43,11 +49,13 @@ class _DevicesScreenState extends State<DevicesScreen> {
           for (final d in list) {
             m[d.deviceId] = d;
             _previousOnline[d.deviceId] = d.online;
+            _checkThresholds(d);
           }
         });
       },
       onData: (d) {
         _updateDevices((m) => m[d.deviceId] = d);
+        _checkThresholds(d);
       },
       onStatus: (id, online, lastSeen) {
         final prev = _previousOnline[id];
@@ -92,6 +100,9 @@ class _DevicesScreenState extends State<DevicesScreen> {
   }
 
   void _handleStatusChange(String id, bool online) {
+    final prefs = PrefsService.get(id);
+    if (online && !prefs.notifyOnline) return;
+    if (!online && !prefs.notifyOffline) return;
     NotificationService.alert(online: online);
     NotificationService.show(
       title: online ? '$id is back online' : '$id went offline',
@@ -99,6 +110,51 @@ class _DevicesScreenState extends State<DevicesScreen> {
           ? 'The device is sending data again'
           : 'The device stopped sending data!',
     );
+  }
+
+  /// Fires the loud alarm when a reading breaks the user's limits.
+  /// Edge-triggered (entry only) + optional 10-minute repeat.
+  void _checkThresholds(DeviceState d) {
+    if (d.temp == null && d.hum == null) return;
+    final prefs = PrefsService.get(d.deviceId);
+    if (!prefs.notifyThreshold) {
+      _wasOutOfRange[d.deviceId] = false;
+      return;
+    }
+    final out = PrefsService.tempOut(d.deviceId, d.temp) ||
+        PrefsService.humOut(d.deviceId, d.hum);
+    final was = _wasOutOfRange[d.deviceId] ?? false;
+    _wasOutOfRange[d.deviceId] = out;
+    if (!out) return;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    final last = _lastAlertMs[d.deviceId] ?? 0;
+    final entered = !was;
+    final repeatDue =
+        prefs.repeatAlarm && now - last > _repeatIntervalMs;
+    if (entered || repeatDue) {
+      _lastAlertMs[d.deviceId] = now;
+      _fireThresholdAlarm(d, prefs);
+    }
+  }
+
+  void _fireThresholdAlarm(DeviceState d, DevicePrefs prefs) {
+    final parts = <String>[];
+    if (PrefsService.tempOut(d.deviceId, d.temp)) {
+      parts.add(
+          'Temperature ${d.temp!.toStringAsFixed(1)}°C outside ${PrefsService.fmt(prefs.minTemp)}–${PrefsService.fmt(prefs.maxTemp)}°C');
+    }
+    if (PrefsService.humOut(d.deviceId, d.hum)) {
+      parts.add(
+          'Humidity ${d.hum!.toStringAsFixed(1)}% outside ${PrefsService.fmt(prefs.minHum)}–${PrefsService.fmt(prefs.maxHum)}%');
+    }
+    NotificationService.thresholdAlarm(
+      title: 'Limit exceeded: ${d.deviceId}',
+      body: parts.join(' • '),
+      useSound: prefs.alarmSound,
+      vibrate: prefs.vibration,
+    );
+    if (prefs.alarmSound) AudioService.playAlarm();
   }
 
   @override
@@ -210,17 +266,22 @@ class _DevicesScreenState extends State<DevicesScreen> {
       child: ValueListenableBuilder<Map<String, DeviceState>>(
         valueListenable: _devicesNotifier,
         builder: (ctx, devices, _) {
-          final list = devices.values.toList()
-            ..sort((a, b) => a.deviceId.compareTo(b.deviceId));
-          if (list.isEmpty) return _buildEmptyState();
-          return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
-            itemCount: list.length,
-            itemBuilder: (c, i) => Entrance(
-              key: ValueKey('card-${list[i].deviceId}'),
-              index: i,
-              child: _buildDeviceCard(list[i]),
-            ),
+          return ValueListenableBuilder<int>(
+            valueListenable: PrefsService.changes,
+            builder: (ctx, _, __) {
+              final list = devices.values.toList()
+                ..sort((a, b) => a.deviceId.compareTo(b.deviceId));
+              if (list.isEmpty) return _buildEmptyState();
+              return ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+                itemCount: list.length,
+                itemBuilder: (c, i) => Entrance(
+                  key: ValueKey('card-${list[i].deviceId}'),
+                  index: i,
+                  child: _buildDeviceCard(list[i]),
+                ),
+              );
+            },
           );
         },
       ),
@@ -321,7 +382,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
                       unit: '°C',
                       label: 'Temperature',
                       color: AppColors.orange,
-                      alert: d.isTempOutOfRange,
+                      alert: PrefsService.tempOut(d.deviceId, d.temp),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -332,7 +393,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
                       unit: '%',
                       label: 'Humidity',
                       color: AppColors.cyan,
-                      alert: d.isHumOutOfRange,
+                      alert: PrefsService.humOut(d.deviceId, d.hum),
                     ),
                   ),
                 ],
@@ -354,6 +415,14 @@ class _DevicesScreenState extends State<DevicesScreen> {
                         fontSize: 12.5,
                       ),
                     ),
+                  ),
+                  IconButton(
+                    onPressed: () => _openSettings(d.deviceId),
+                    icon: const Icon(Icons.tune_rounded,
+                        size: 19, color: AppColors.faint),
+                    tooltip: 'Limits & alerts',
+                    constraints: const BoxConstraints(),
+                    padding: const EdgeInsets.all(4),
                   ),
                   const Icon(Icons.chevron_right,
                       size: 18, color: AppColors.faint),
@@ -435,6 +504,15 @@ class _DevicesScreenState extends State<DevicesScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  void _openSettings(String deviceId) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DeviceSettingsScreen(deviceId: deviceId),
       ),
     );
   }

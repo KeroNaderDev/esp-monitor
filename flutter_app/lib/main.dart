@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'screens/devices_screen.dart';
+import 'services/prefs_service.dart';
 import 'theme/app_theme.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await PrefsService.init();
   runApp(const EspMonitorApp());
 }
 

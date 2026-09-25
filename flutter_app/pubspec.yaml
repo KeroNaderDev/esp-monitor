@@ -1,7 +1,7 @@
 name: esp_monitor
 description: ESP8266 Multi-Device Monitor
 publish_to: 'none'
-version: 1.1.0+2
+version: 1.2.0+3
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -12,6 +12,8 @@ dependencies:
   cupertino_icons: ^1.0.6
   http: ^1.1.0
   flutter_local_notifications: ^17.0.0
+  shared_preferences: ^2.5.0
+  audioplayers: ^6.1.0
 
 dev_dependencies:
   flutter_lints: ^3.0.0
@@ -19,6 +21,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/sounds/
 
 flutter_launcher_icons:
   android: true

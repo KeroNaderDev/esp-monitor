@@ -43,7 +43,4 @@ class DeviceState {
       backfilled: backfilled ?? this.backfilled,
     );
   }
-
-  bool get isTempOutOfRange => temp != null && (temp! > 32 || temp! < 28);
-  bool get isHumOutOfRange => hum != null && (hum! > 70 || hum! < 60);
 }

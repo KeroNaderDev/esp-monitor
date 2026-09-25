@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/device_state.dart';
 import '../theme/app_theme.dart';
+import '../services/prefs_service.dart';
+import 'device_settings_screen.dart';
 
 /// Detail view for one device — live via the shared ValueNotifier.
 class DeviceDetailScreen extends StatelessWidget {
@@ -34,18 +36,24 @@ class DeviceDetailScreen extends StatelessWidget {
                             Map<String, DeviceState>>(
                           valueListenable: devicesNotifier,
                           builder: (ctx, devices, _) {
-                            final d = devices[deviceId];
-                            if (d == null) {
-                              return const Padding(
-                                padding: EdgeInsets.only(top: 80),
-                                child: Text(
-                                  'No data for this device',
-                                  style: TextStyle(
-                                      color: AppColors.muted),
-                                ),
-                              );
-                            }
-                            return _buildContent(d);
+                            return ValueListenableBuilder<int>(
+                              valueListenable: PrefsService.changes,
+                              builder: (ctx, _, __) {
+                                final d = devices[deviceId];
+                                if (d == null) {
+                                  return const Padding(
+                                    padding:
+                                        EdgeInsets.only(top: 80),
+                                    child: Text(
+                                      'No data for this device',
+                                      style: TextStyle(
+                                          color: AppColors.muted),
+                                    ),
+                                  );
+                                }
+                                return _buildContent(d);
+                              },
+                            );
                           },
                         ),
                       ),
@@ -91,6 +99,27 @@ class DeviceDetailScreen extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          IconButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) =>
+                      DeviceSettingsScreen(deviceId: deviceId),
+                ),
+              );
+            },
+            icon: const Icon(Icons.tune_rounded,
+                color: AppColors.indigo),
+            tooltip: 'Limits & alerts',
+            style: IconButton.styleFrom(
+              backgroundColor:
+                  Colors.white.withValues(alpha: 0.06),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -99,6 +128,9 @@ class DeviceDetailScreen extends StatelessWidget {
   Widget _buildContent(DeviceState d) {
     final online = d.online;
     final statusColor = online ? AppColors.green : AppColors.red;
+    final prefs = PrefsService.get(d.deviceId);
+    final tempAlert = PrefsService.tempOut(d.deviceId, d.temp);
+    final humAlert = PrefsService.humOut(d.deviceId, d.hum);
 
     return Column(
       children: [
@@ -202,8 +234,9 @@ class DeviceDetailScreen extends StatelessWidget {
                     : (d.temp! / 50).clamp(0.0, 1.0),
                 color: AppColors.orange,
                 deepColor: AppColors.orangeDeep,
-                alert: d.isTempOutOfRange,
-                rangeLabel: 'Normal 28–32°C',
+                alert: tempAlert,
+                rangeLabel:
+                    'Normal ${PrefsService.fmt(prefs.minTemp)}–${PrefsService.fmt(prefs.maxTemp)}°C',
               ),
             ),
             const SizedBox(width: 14),
@@ -217,8 +250,9 @@ class DeviceDetailScreen extends StatelessWidget {
                     d.hum == null ? 0 : (d.hum! / 100).clamp(0.0, 1.0),
                 color: AppColors.cyan,
                 deepColor: const Color(0xFF0EA5E9),
-                alert: d.isHumOutOfRange,
-                rangeLabel: 'Normal 60–70%',
+                alert: humAlert,
+                rangeLabel:
+                    'Normal ${PrefsService.fmt(prefs.minHum)}–${PrefsService.fmt(prefs.maxHum)}%',
               ),
             ),
           ],
@@ -231,8 +265,8 @@ class DeviceDetailScreen extends StatelessWidget {
               _infoRow(Icons.memory_outlined, 'Device', deviceId),
               const Divider(
                   color: Colors.white10, height: 22),
-              _infoRow(Icons.tune_outlined, 'Ranges',
-                  '28–32°C  •  60–70%'),
+              _infoRow(Icons.tune_outlined, 'Limits',
+                  '${PrefsService.fmt(prefs.minTemp)}–${PrefsService.fmt(prefs.maxTemp)}°C  •  ${PrefsService.fmt(prefs.minHum)}–${PrefsService.fmt(prefs.maxHum)}%'),
               if (d.backfilled > 0) ...[
                 const Divider(
                     color: Colors.white10, height: 22),

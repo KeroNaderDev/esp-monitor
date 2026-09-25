@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
@@ -29,7 +30,7 @@ class NotificationService {
     const androidDetails = AndroidNotificationDetails(
       'esp_channel',
       'ESP8266 Status',
-      channelDescription: 'تنبيهات حالة الأجهزة',
+      channelDescription: 'Device online/offline updates',
       importance: Importance.max,
       priority: Priority.high,
       playSound: false,
@@ -38,6 +39,44 @@ class NotificationService {
     const details = NotificationDetails(
       android: androidDetails,
       iOS: DarwinNotificationDetails(),
+    );
+
+    await _plugin.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      title,
+      body,
+      details,
+    );
+  }
+
+  /// Loud alarm notification for limit violations.
+  static Future<void> thresholdAlarm({
+    required String title,
+    required String body,
+    required bool useSound,
+    required bool vibrate,
+  }) async {
+    final androidDetails = AndroidNotificationDetails(
+      'esp_alarm',
+      'ESP Alarm',
+      channelDescription: 'Loud alarm when a reading breaks its limits',
+      importance: Importance.max,
+      priority: Priority.high,
+      playSound: useSound,
+      sound: useSound
+          ? const RawResourceAndroidNotificationSound('alarm')
+          : null,
+      enableVibration: vibrate,
+      vibrationPattern: vibrate
+          ? Int64List.fromList(const [0, 600, 300, 600, 300, 900])
+          : null,
+      category: AndroidNotificationCategory.alarm,
+      visibility: NotificationVisibility.public,
+    );
+
+    final details = NotificationDetails(
+      android: androidDetails,
+      iOS: DarwinNotificationDetails(presentSound: useSound),
     );
 
     await _plugin.show(
