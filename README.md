@@ -10,6 +10,8 @@ Real-time temperature & humidity monitoring for multiple ESP8266 (DHT22) devices
 
 **Live server:** `https://esp-monitor-production.up.railway.app`
 
+**Android APK:** [esp-monitor-v1.0.0.apk](https://github.com/KeroNaderDev/esp-monitor/releases/download/v1.0.0/esp-monitor-v1.0.0.apk) (direct install, Android 7.0+)
+
 ## Overview
 
 Each ESP8266 reads a DHT22 sensor and `POST`s `{ device_id, temp, hum }` every 5 seconds.
