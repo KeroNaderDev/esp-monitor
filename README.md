@@ -14,7 +14,13 @@ Real-time temperature & humidity monitoring for multiple ESP8266 (DHT22) devices
 
 **Live server:** `https://esp-monitor-production.up.railway.app`
 
-**Android APK:** [esp-monitor-v1.0.0.apk](https://github.com/KeroNaderDev/esp-monitor/releases/download/v1.0.0/esp-monitor-v1.0.0.apk) (direct install, Android 7.0+)
+**Android APK (v1.1.0, release-signed, Android 7.0+):**
+
+| File | Size | For |
+| ---- | ---- | --- |
+| [esp-monitor-v1.1.0-arm64.apk](https://github.com/KeroNaderDev/esp-monitor/releases/download/v1.1.0/esp-monitor-v1.1.0-arm64.apk) | 15.8 MB | All modern phones (recommended) |
+| [esp-monitor-v1.1.0-armeabi-v7a.apk](https://github.com/KeroNaderDev/esp-monitor/releases/download/v1.1.0/esp-monitor-v1.1.0-armeabi-v7a.apk) | 13.0 MB | Older 32-bit phones |
+| [esp-monitor-v1.1.0-x86_64.apk](https://github.com/KeroNaderDev/esp-monitor/releases/download/v1.1.0/esp-monitor-v1.1.0-x86_64.apk) | 17.3 MB | Emulators / x86 devices |
 
 ## Overview
 
