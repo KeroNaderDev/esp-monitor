@@ -61,7 +61,6 @@ app.post('/api/data', (req, res) => {
       timestamp: Date.now(),
       lastSeen: devices[device_id].lastSeen
     });
-    notifyTelegram(`${device_id} رجع متصل`);
   }
 
   broadcast('data', devices[device_id]);
@@ -126,7 +125,6 @@ app.post('/api/data/batch', (req, res) => {
       timestamp: now,
       lastSeen: devices[device_id].lastSeen
     });
-    notifyTelegram(`${device_id} رجع متصل وأرسل ${valid.length} قراءة مخزنة`);
   }
 
   broadcast('data', devices[device_id]);
@@ -201,29 +199,9 @@ setInterval(() => {
         timestamp: now,
         lastSeen: d.lastSeen
       });
-      notifyTelegram(
-        `${d.device_id} فصل!\nآخر إشارة: ${new Date(d.lastSeen).toLocaleTimeString()}`
-      );
     }
   });
 }, CHECK_INTERVAL);
-
-// ===== تيليجرام =====
-const TG_TOKEN = process.env.TG_TOKEN;
-const TG_CHAT  = process.env.TG_CHAT;
-
-async function notifyTelegram(msg) {
-  if (!TG_TOKEN || !TG_CHAT) return;
-  try {
-    await fetch(`https://api.telegram.org/bot${TG_TOKEN}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: TG_CHAT, text: msg })
-    });
-  } catch (e) {
-    console.error('Telegram error:', e.message);
-  }
-}
 
 // ===== Health =====
 app.get('/health', (req, res) => {

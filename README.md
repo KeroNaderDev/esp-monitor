@@ -25,7 +25,6 @@ Adding a new device requires zero backend or app changes — the first `POST` fr
 - **Live updates via SSE** — `init`, `data`, `status`, `device_added`, `device_removed` events
 - **Per-device offline detection** — 12 s threshold checked every 2 s, one device going down doesn't affect the rest
 - **Flutter app** — device list + detail views, shared real-time state, local push notifications per device
-- **Telegram alerts** — offline/online notifications per device name (optional)
 - **Zero-config onboarding** — new `device_id` appears in the app on first reading
 - **Health & inspection endpoints** — `/health`, `/api/devices`, `/api/devices/:id`
 
@@ -38,7 +37,6 @@ flowchart LR
     C["ESP8266 #n<br/>DHT22 · ..."] -- "POST /api/data<br/>every 5s" --> S
     S -- "SSE /api/stream" --> W["Web dashboard<br/>public/index.html"]
     S -- "SSE /api/stream" --> F["Flutter app<br/>list + detail"]
-    S -- "offline / online" --> T["Telegram<br/>optional"]
 ```
 
 ## Tech Stack
@@ -57,9 +55,9 @@ flowchart LR
 ├── firmware/
 │   └── esp8266_dht22.ino        # Unified firmware for all nodes (live send + offline LittleFS buffer with batch sync)
 ├── esp-server/
-│   ├── server.js                # Express API + SSE + offline watchdog + Telegram
+│   ├── server.js                # Express API + SSE + offline watchdog
 │   ├── package.json
-│   ├── .env.example             # PORT, TG_TOKEN, TG_CHAT
+│   ├── .env.example             # PORT
 │   └── public/
 │       └── index.html           # Lightweight web dashboard (EventSource)
 ├── flutter_app/
@@ -137,7 +135,7 @@ curl https://esp-monitor-production.up.railway.app/health
 
 ```bash
 cd esp-server
-cp .env.example .env   # optional: fill TG_TOKEN / TG_CHAT for Telegram alerts
+cp .env.example .env   # optional local config
 npm install
 npm start              # serves on PORT (default 3000)
 ```
@@ -147,7 +145,6 @@ Deploy to Railway:
 1. Push this repo to GitHub
 2. [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub** → select repo (service root: `esp-server`)
 3. **Settings → Networking → Generate Domain**
-4. (Optional) **Variables**: `TG_TOKEN`, `TG_CHAT`
 
 ### 2. Firmware (one file, N devices)
 
@@ -200,8 +197,6 @@ flutter run
 | Variable   | Where       | Required | Description                                    |
 | ---------- | ----------- | -------- | ---------------------------------------------- |
 | `PORT`     | Server      | No       | HTTP port (Railway injects it; default `3000`) |
-| `TG_TOKEN` | Server      | No       | Telegram bot token for offline/online alerts   |
-| `TG_CHAT`  | Server      | No       | Telegram chat id receiving the alerts          |
 | `serverURL`| Firmware    | Yes      | `https://<domain>/api/data`                    |
 | `deviceId` | Firmware    | Yes      | Unique id per ESP board                        |
 | `serverUrl`| Flutter app | Yes      | `https://<domain>` (no trailing `/api`)        |
@@ -217,7 +212,6 @@ Offline logic: a device is marked offline when `now - lastSeen > 12000 ms`
 | ESP `HTTP 404/400`               | Wrong `serverURL` path (must end with `/api/data`) or missing `device_id`      |
 | Device stuck "offline" in app    | ESP not reaching the server; check Wi-Fi creds and that `/health` is reachable  |
 | SSE disconnects frequently       | Normal on flaky networks — both web and Flutter clients auto-reconnect          |
-| No Telegram messages             | `TG_TOKEN` / `TG_CHAT` not set as Railway variables                             |
 
 ## Roadmap
 
@@ -230,7 +224,7 @@ Offline logic: a device is marked offline when `now - lastSeen > 12000 ms`
 
 المشروع يراقب عدة أجهزة ESP8266 (حساس DHT22) لحظيًا: كل جهاز يرسل الحرارة والرطوبة
 كل 5 ثواني للسيرفر، والسيرفر يوزع التحديثات على الموبايل والمتصفح عبر SSE، مع كشف
-مستقل لكل جهاز عند توقفه وإشعارات Telegram اختيارية. لإضافة جهاز جديد يكفي تفليش
+مستقل لكل جهاز عند توقفه. لإضافة جهاز جديد يكفي تفليش
 نفس الكود مع `deviceId` مختلف — لا حاجة لتعديل السيرفر أو التطبيق. والـ firmware يخزن القراءات
 داخل ذاكرة الجهاز عند انقطاع الواي فاي ويرسلها كلها تلقائيًا عند عودة الشبكة.
 
