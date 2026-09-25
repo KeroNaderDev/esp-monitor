@@ -8,6 +8,11 @@ yarn-error.log
 .env
 .env.local
 
+# Release signing (never commit the keystore)
+.keystore/
+*.jks
+key.properties
+
 # Flutter / Dart
 .dart_tool/
 .flutter-plugins

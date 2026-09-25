@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../models/device_state.dart';
 import '../services/sse_service.dart';
 import '../services/notification_service.dart';
+import '../theme/app_theme.dart';
 import 'device_detail_screen.dart';
 
 class DevicesScreen extends StatefulWidget {
@@ -16,7 +17,7 @@ class DevicesScreen extends StatefulWidget {
 class _DevicesScreenState extends State<DevicesScreen> {
   late SseService _sse;
 
-  // مصدر الحقيقة الوحيد — مشترك مع شاشة التفاصيل
+  // Single source of truth, shared with the detail screen.
   final ValueNotifier<Map<String, DeviceState>> _devicesNotifier =
       ValueNotifier({});
   final Map<String, bool> _previousOnline = {};
@@ -56,8 +57,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
         _updateDevices((m) {
           final existing = m[id];
           if (existing != null) {
-            m[id] =
-                existing.copyWith(online: online, lastSeen: lastSeen);
+            m[id] = existing.copyWith(online: online, lastSeen: lastSeen);
           } else {
             m[id] = DeviceState(
               deviceId: id,
@@ -85,7 +85,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
     _sse.connect();
 
-    // لتحديث "متوقف من X" كل ثانية
+    // Refresh "stopped X ago" labels every second.
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted) setState(() {});
     });
@@ -93,17 +93,12 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
   void _handleStatusChange(String id, bool online) {
     NotificationService.alert(online: online);
-    if (online) {
-      NotificationService.show(
-        title: '$id متصل',
-        body: 'الجهاز رجع يبعت بيانات',
-      );
-    } else {
-      NotificationService.show(
-        title: '$id معطل',
-        body: 'الجهاز توقف عن الإرسال!',
-      );
-    }
+    NotificationService.show(
+      title: online ? '$id is back online' : '$id went offline',
+      body: online
+          ? 'The device is sending data again'
+          : 'The device stopped sending data!',
+    );
   }
 
   @override
@@ -117,36 +112,83 @@ class _DevicesScreenState extends State<DevicesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF1E1E2E),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          'ESP Monitor',
-          style: TextStyle(color: Color(0xFFA5B4FC), fontSize: 20),
-        ),
-        actions: [
+      body: Stack(
+        children: [
+          const Backdrop(),
+          SafeArea(
+            child: Column(
+              children: [
+                _buildHeader(),
+                Expanded(child: _buildList()),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 6),
+      child: Row(
+        children: [
+          const LogoTile(),
+          const SizedBox(width: 14),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'ESP Monitor',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.5,
+                  ),
+                ),
+                SizedBox(height: 2),
+                Text(
+                  'Live sensor network',
+                  style: TextStyle(color: AppColors.muted, fontSize: 12.5),
+                ),
+              ],
+            ),
+          ),
           ValueListenableBuilder<Map<String, DeviceState>>(
             valueListenable: _devicesNotifier,
             builder: (ctx, devices, _) {
               final list = devices.values.toList();
-              final onlineCount = list.where((d) => d.online).length;
-              return Padding(
-                padding: const EdgeInsets.only(left: 16, right: 16),
+              final online = list.where((d) => d.online).length;
+              return Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.06),
+                  borderRadius: BorderRadius.circular(50),
+                  border: Border.all(
+                      color: Colors.white.withValues(alpha: 0.1)),
+                ),
                 child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(
-                      Icons.circle,
-                      size: 10,
+                    PulseDot(
                       color: _serverConnected
-                          ? const Color(0xFF22C55E)
-                          : const Color(0xFFEF4444),
+                          ? AppColors.green
+                          : AppColors.red,
+                      animate: _serverConnected,
+                      size: 8,
                     ),
-                    const SizedBox(width: 6),
+                    const SizedBox(width: 8),
                     Text(
-                      '$onlineCount/${list.length}',
+                      '$online/${list.length}',
                       style: const TextStyle(
-                          color: Color(0xFF94A3B8), fontSize: 14),
+                        color: AppColors.muted,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
                     ),
                   ],
                 ),
@@ -155,46 +197,71 @@ class _DevicesScreenState extends State<DevicesScreen> {
           ),
         ],
       ),
-      body: RefreshIndicator(
-        color: const Color(0xFFA5B4FC),
-        backgroundColor: const Color(0xFF2A2A3E),
-        onRefresh: () async {
-          await Future.delayed(const Duration(milliseconds: 500));
+    );
+  }
+
+  Widget _buildList() {
+    return RefreshIndicator(
+      color: AppColors.indigo,
+      backgroundColor: AppColors.card,
+      onRefresh: () async {
+        await Future.delayed(const Duration(milliseconds: 500));
+      },
+      child: ValueListenableBuilder<Map<String, DeviceState>>(
+        valueListenable: _devicesNotifier,
+        builder: (ctx, devices, _) {
+          final list = devices.values.toList()
+            ..sort((a, b) => a.deviceId.compareTo(b.deviceId));
+          if (list.isEmpty) return _buildEmptyState();
+          return ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+            itemCount: list.length,
+            itemBuilder: (c, i) => Entrance(
+              key: ValueKey('card-${list[i].deviceId}'),
+              index: i,
+              child: _buildDeviceCard(list[i]),
+            ),
+          );
         },
-        child: ValueListenableBuilder<Map<String, DeviceState>>(
-          valueListenable: _devicesNotifier,
-          builder: (ctx, devices, _) {
-            final list = devices.values.toList()
-              ..sort((a, b) => a.deviceId.compareTo(b.deviceId));
-            if (list.isEmpty) return _buildEmptyState();
-            return ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: list.length,
-              itemBuilder: (c, i) => _buildDeviceCard(list[i]),
-            );
-          },
-        ),
       ),
     );
   }
 
   Widget _buildEmptyState() {
     return ListView(
-      children: const [
-        SizedBox(height: 120),
+      children: [
+        const SizedBox(height: 110),
         Center(
           child: Column(
             children: [
-              Text('📭', style: TextStyle(fontSize: 60)),
-              SizedBox(height: 16),
-              Text(
-                'لا توجد أجهزة متصلة',
-                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 16),
+              Container(
+                width: 92,
+                height: 92,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.indigo.withValues(alpha: 0.12),
+                  border: Border.all(
+                      color: AppColors.indigo.withValues(alpha: 0.3)),
+                ),
+                child: const Icon(
+                  Icons.sensors_outlined,
+                  color: AppColors.indigo,
+                  size: 44,
+                ),
               ),
-              SizedBox(height: 8),
-              Text(
-                'في انتظار أول قراءة من ESP...',
-                style: TextStyle(color: Color(0xFF64748B), fontSize: 13),
+              const SizedBox(height: 20),
+              const Text(
+                'No devices yet',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Waiting for the first reading from an ESP…',
+                style: TextStyle(color: AppColors.faint, fontSize: 13),
               ),
             ],
           ),
@@ -204,170 +271,180 @@ class _DevicesScreenState extends State<DevicesScreen> {
   }
 
   Widget _buildDeviceCard(DeviceState d) {
-    final color = d.online ? const Color(0xFF4ADE80) : const Color(0xFFF87171);
-    final bg = d.online ? const Color(0x2622C55E) : const Color(0x26EF4444);
-
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => DeviceDetailScreen(
-                  deviceId: d.deviceId,
-                  devicesNotifier: _devicesNotifier,
-                ),
+      padding: const EdgeInsets.only(bottom: 14),
+      child: GestureDetector(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => DeviceDetailScreen(
+                deviceId: d.deviceId,
+                devicesNotifier: _devicesNotifier,
               ),
-            );
-          },
-          child: Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0x0FFFFFFF),
-              border: Border.all(color: const Color(0x1AFFFFFF)),
-              borderRadius: BorderRadius.circular(16),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Row(
-                        children: [
-                          _PulsingDot(color: color, animate: d.online),
-                          const SizedBox(width: 10),
-                          Flexible(
-                            child: Text(
-                              d.deviceId,
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.w600,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ],
+          );
+        },
+        child: GradientCard(
+          online: d.online,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  PulseDot(
+                    color: d.online ? AppColors.green : AppColors.red,
+                    animate: d.online,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      d.deviceId,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16.5,
+                        fontWeight: FontWeight.w700,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  StatusPill(online: d.online),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: _metricTile(
+                      icon: Icons.thermostat,
+                      value: d.temp?.toStringAsFixed(1) ?? '--',
+                      unit: '°C',
+                      label: 'Temperature',
+                      color: AppColors.orange,
+                      alert: d.isTempOutOfRange,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _metricTile(
+                      icon: Icons.water_drop,
+                      value: d.hum?.toStringAsFixed(1) ?? '--',
+                      unit: '%',
+                      label: 'Humidity',
+                      color: AppColors.cyan,
+                      alert: d.isHumOutOfRange,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Icon(
+                    d.online ? Icons.bolt : Icons.timer_off_outlined,
+                    size: 14,
+                    color: d.online ? AppColors.faint : AppColors.red,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      _statusLine(d),
+                      style: TextStyle(
+                        color: d.online ? AppColors.muted : AppColors.red,
+                        fontSize: 12.5,
                       ),
                     ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: bg,
-                        borderRadius: BorderRadius.circular(50),
-                      ),
-                      child: Text(
-                        d.online ? 'متصل' : 'معطل',
-                        style: TextStyle(
-                          color: color,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _miniReading(
-                        '🌡️',
-                        d.temp?.toStringAsFixed(1) ?? '--',
-                        '°C',
-                        const Color(0xFFFB923C),
-                        d.isTempOutOfRange,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _miniReading(
-                        '💧',
-                        d.hum?.toStringAsFixed(1) ?? '--',
-                        '%',
-                        const Color(0xFF38BDF8),
-                        d.isHumOutOfRange,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    const Icon(Icons.access_time,
-                        size: 13, color: Color(0xFF64748B)),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        _statusLine(d),
-                        style: TextStyle(
-                          color: d.online
-                              ? const Color(0xFF94A3B8)
-                              : const Color(0xFFF87171),
-                          fontSize: 12,
-                        ),
-                      ),
-                    ),
-                    const Icon(Icons.chevron_left,
-                        size: 18, color: Color(0xFF64748B)),
-                  ],
-                ),
-              ],
-            ),
+                  ),
+                  const Icon(Icons.chevron_right,
+                      size: 18, color: AppColors.faint),
+                ],
+              ),
+            ],
           ),
         ),
       ),
     );
   }
 
-  Widget _miniReading(
-    String icon,
-    String value,
-    String unit,
-    Color color,
-    bool alert,
-  ) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+  Widget _metricTile({
+    required IconData icon,
+    required String value,
+    required String unit,
+    required String label,
+    required Color color,
+    required bool alert,
+  }) {
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 350),
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
       decoration: BoxDecoration(
-        color:
-            alert ? const Color(0x26EF4444) : const Color(0x0FFFFFFF),
-        borderRadius: BorderRadius.circular(10),
+        color: alert
+            ? AppColors.red.withValues(alpha: 0.12)
+            : color.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(14),
         border: alert
-            ? Border.all(color: const Color(0xFFEF4444), width: 1)
+            ? Border.all(color: AppColors.red.withValues(alpha: 0.6))
             : null,
       ),
       child: Row(
         children: [
-          Text(icon, style: const TextStyle(fontSize: 18)),
-          const SizedBox(width: 8),
-          Text(
-            value,
-            style: TextStyle(
-              color: color,
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.16),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(icon, color: color, size: 20),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        value,
+                        style: TextStyle(
+                          color: color,
+                          fontSize: 21,
+                          fontWeight: FontWeight.w800,
+                          fontFeatures: const [
+                            FontFeature.tabularFigures()
+                          ],
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 3),
+                    Text(unit,
+                        style: TextStyle(color: color, fontSize: 12)),
+                  ],
+                ),
+                Text(
+                  alert ? '$label • out of range' : label,
+                  style: TextStyle(
+                    color: alert ? AppColors.red : AppColors.faint,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(width: 2),
-          Text(unit, style: TextStyle(color: color, fontSize: 12)),
         ],
       ),
     );
   }
 
   String _statusLine(DeviceState d) {
-    if (d.lastSeen == 0) return 'في انتظار البيانات...';
-    if (d.online) return 'آخر إشارة: ${_formatTime(d.lastSeen)}';
+    if (d.lastSeen == 0) return 'Waiting for data…';
+    if (d.online) return 'Last signal ${_formatTime(d.lastSeen)}';
     final diff = DateTime.now()
         .difference(DateTime.fromMillisecondsSinceEpoch(d.lastSeen));
-    return 'متوقف من ${_formatDuration(diff)}';
+    return 'Stopped ${_formatDuration(diff)} ago';
   }
 
   String _formatTime(int ms) {
@@ -378,66 +455,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
   }
 
   String _formatDuration(Duration d) {
-    if (d.inMinutes > 0) return '${d.inMinutes} د ${d.inSeconds % 60} ث';
-    return '${d.inSeconds} ث';
-  }
-}
-
-class _PulsingDot extends StatefulWidget {
-  final Color color;
-  final bool animate;
-  const _PulsingDot({required this.color, required this.animate});
-
-  @override
-  State<_PulsingDot> createState() => _PulsingDotState();
-}
-
-class _PulsingDotState extends State<_PulsingDot>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 2),
-    );
-    if (widget.animate) _ctrl.repeat(reverse: true);
-  }
-
-  @override
-  void didUpdateWidget(covariant _PulsingDot old) {
-    super.didUpdateWidget(old);
-    if (widget.animate && !_ctrl.isAnimating) {
-      _ctrl.repeat(reverse: true);
-    } else if (!widget.animate) {
-      _ctrl.stop();
-      _ctrl.value = 1.0;
-    }
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: Tween(begin: 0.5, end: 1.0).animate(_ctrl),
-      child: ScaleTransition(
-        scale: Tween(begin: 1.0, end: 1.2).animate(_ctrl),
-        child: Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: widget.color,
-            shape: BoxShape.circle,
-          ),
-        ),
-      ),
-    );
+    if (d.inMinutes > 0) return '${d.inMinutes}m ${d.inSeconds % 60}s';
+    return '${d.inSeconds}s';
   }
 }

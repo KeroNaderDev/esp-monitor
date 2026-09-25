@@ -4,6 +4,7 @@ class DeviceState {
   final double? hum;
   final int lastSeen;
   final bool online;
+  final int backfilled;
 
   DeviceState({
     required this.deviceId,
@@ -11,6 +12,7 @@ class DeviceState {
     required this.hum,
     required this.lastSeen,
     required this.online,
+    this.backfilled = 0,
   });
 
   factory DeviceState.fromJson(Map<String, dynamic> json) {
@@ -20,6 +22,7 @@ class DeviceState {
       hum: json['hum'] != null ? (json['hum'] as num).toDouble() : null,
       lastSeen: json['lastSeen'] ?? 0,
       online: json['online'] ?? false,
+      backfilled: json['backfilled'] ?? 0,
     );
   }
 
@@ -29,6 +32,7 @@ class DeviceState {
     double? hum,
     int? lastSeen,
     bool? online,
+    int? backfilled,
   }) {
     return DeviceState(
       deviceId: deviceId ?? this.deviceId,
@@ -36,6 +40,7 @@ class DeviceState {
       hum: hum ?? this.hum,
       lastSeen: lastSeen ?? this.lastSeen,
       online: online ?? this.online,
+      backfilled: backfilled ?? this.backfilled,
     );
   }
 

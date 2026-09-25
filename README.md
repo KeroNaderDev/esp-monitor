@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="flutter_app/assets/icon/app_icon.png" width="120" alt="ESP Monitor logo">
+</p>
+
 # ESP Multi-Device Monitor
 
 Real-time temperature & humidity monitoring for multiple ESP8266 (DHT22) devices, with a Node.js backend (SSE) and a Flutter mobile app.
@@ -65,9 +69,12 @@ flowchart LR
 ├── flutter_app/
 │   ├── pubspec.yaml
 │   ├── android_permissions_snippet.xml
+│   ├── android_desugaring_snippet.kts
+│   ├── assets/icon/                 # App logo (app_icon.png + adaptive foreground)
 │   └── lib/
 │       ├── main.dart
 │       ├── models/device_state.dart
+│       ├── theme/app_theme.dart     # Colors, gradient cards, animations
 │       ├── services/
 │       │   ├── sse_service.dart            # SSE client with auto-reconnect
 │       │   └── notification_service.dart   # Local notifications + haptics
@@ -190,6 +197,32 @@ flutter run
 - Set `serverUrl` in `lib/main.dart` (defaults to the live server above)
 - Add the permissions from `android_permissions_snippet.xml` to `android/app/src/main/AndroidManifest.xml`
 - Apply `android_desugaring_snippet.kts` to `android/app/build.gradle.kts` (required by `flutter_local_notifications`)
+- Generate launcher icons: `dart run flutter_launcher_icons` (config in `pubspec.yaml`, artwork in `assets/icon/`)
+
+### Release build & signing
+
+The keystore is intentionally **not** in the repo. To cut a signed release:
+
+```bash
+# 1. Generate (once) — back it up, Play updates require the SAME key
+keytool -genkeypair -keystore esp-monitor.jks -alias espmonitor \
+  -keyalg RSA -keysize 2048 -validity 36500
+
+# 2. android/key.properties (never commit)
+storePassword=<pass>
+keyPassword=<pass>
+keyAlias=espmonitor
+storeFile=/absolute/path/esp-monitor.jks
+
+# 3. Wire signingConfigs.release to key.properties in
+#    android/app/build.gradle.kts, then:
+flutter build apk --release --split-per-abi --obfuscate \
+  --split-debug-info=/path/to/symbols
+```
+
+`--split-per-abi` produces one small APK per architecture
+(`app-arm64-v8a-release.apk` covers virtually all modern phones)
+instead of one 45MB+ universal APK.
 - Alert thresholds live in `lib/models/device_state.dart`: temp 28–32 °C, humidity 60–70%
 
 > `DevicesScreen` owns a `ValueNotifier<Map<String, DeviceState>>` shared with
