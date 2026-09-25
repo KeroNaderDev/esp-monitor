@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ESP Devices</title>
+  <style>
+    body { background:#1e1e2e; color:#fff; font-family:sans-serif;
+           padding:20px; margin:0; }
+    h1 { text-align:center; color:#a5b4fc; }
+    .grid { display:grid; gap:12px; max-width:800px; margin:auto;
+            grid-template-columns:repeat(auto-fill,minmax(240px,1fr)); }
+    .card { background:#ffffff10; border:1px solid #ffffff1a;
+            border-radius:12px; padding:16px; }
+    .card h3 { margin:0 0 8px; color:#a5b4fc; }
+    .badge { display:inline-block; padding:4px 12px; border-radius:50px;
+             font-size:12px; margin-bottom:8px; }
+    .online { background:#22c55e26; color:#4ade80; }
+    .offline { background:#ef444426; color:#f87171; }
+    .val { font-size:24px; font-weight:700; margin:4px 0; }
+  </style>
+</head>
+<body>
+  <h1>Devices</h1>
+  <div id="grid" class="grid"></div>
+  <script>
+    const devices = {};
+    const grid = document.getElementById('grid');
+
+    function render() {
+      grid.innerHTML = '';
+      const list = Object.values(devices);
+      if (!list.length) {
+        grid.innerHTML = '<p style="text-align:center;color:#94a3b8">لا توجد أجهزة</p>';
+        return;
+      }
+      list.forEach(d => {
+        const el = document.createElement('div');
+        el.className = 'card';
+        el.innerHTML = `
+          <h3>${d.device_id}</h3>
+          <span class="badge ${d.online ? 'online' : 'offline'}">
+            ${d.online ? 'متصل' : 'معطل'}
+          </span>
+          <div class="val">${d.temp ?? '--'}°C</div>
+          <div class="val">${d.hum ?? '--'}%</div>
+          <small style="color:#94a3b8">
+            ${d.lastSeen ? new Date(d.lastSeen).toLocaleTimeString('ar-EG') : ''}
+          </small>
+        `;
+        grid.appendChild(el);
+      });
+    }
+
+    const es = new EventSource('/api/stream');
+    es.addEventListener('init', e => {
+      JSON.parse(e.data).forEach(d => devices[d.device_id] = d);
+      render();
+    });
+    es.addEventListener('data', e => {
+      const d = JSON.parse(e.data);
+      devices[d.device_id] = d;
+      render();
+    });
+    es.addEventListener('status', e => {
+      const d = JSON.parse(e.data);
+      if (devices[d.device_id]) {
+        devices[d.device_id].online = d.online;
+        devices[d.device_id].lastSeen = d.lastSeen;
+      }
+      render();
+    });
+    es.addEventListener('device_added', e => {
+      const d = JSON.parse(e.data);
+      devices[d.device_id] = d;
+      render();
+    });
+    es.addEventListener('device_removed', e => {
+      const d = JSON.parse(e.data);
+      delete devices[d.device_id];
+      render();
+    });
+  </script>
+</body>
+</html>
