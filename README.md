@@ -21,7 +21,7 @@ Adding a new device requires zero backend or app changes — the first `POST` fr
 ## Features
 
 - **Multi-device out of the box** — one firmware for all nodes, unique `deviceId` per board
-- **Offline buffering** — `esp8266_buffered.ino` stores readings in LittleFS flash when Wi-Fi is down (up to ~2000) and syncs them in batches on reconnect, with per-reading age so the server reconstructs timestamps
+- **Offline buffering** — the firmware stores readings in LittleFS flash when Wi-Fi is down (up to ~2000) and syncs them in batches on reconnect, with per-reading age so the server reconstructs timestamps
 - **Live updates via SSE** — `init`, `data`, `status`, `device_added`, `device_removed` events
 - **Per-device offline detection** — 12 s threshold checked every 2 s, one device going down doesn't affect the rest
 - **Flutter app** — device list + detail views, shared real-time state, local push notifications per device
@@ -55,8 +55,7 @@ flowchart LR
 ```
 .
 ├── firmware/
-│   ├── esp8266_dht22.ino        # Live-only firmware (simplest)
-│   └── esp8266_buffered.ino     # With offline buffer: stores to LittleFS when Wi-Fi is down, syncs via /api/data/batch on reconnect
+│   └── esp8266_dht22.ino        # Unified firmware for all nodes (live send + offline LittleFS buffer with batch sync)
 ├── esp-server/
 │   ├── server.js                # Express API + SSE + offline watchdog + Telegram
 │   ├── package.json
@@ -152,12 +151,8 @@ Deploy to Railway:
 
 ### 2. Firmware (one file, N devices)
 
-Two variants in `firmware/`:
-
-| File | Use when |
-| ---- | -------- |
-| `esp8266_dht22.ino` | Stable Wi-Fi — sends live readings only (simplest) |
-| `esp8266_buffered.ino` | Unstable Wi-Fi — stores readings in flash (LittleFS) while offline and syncs them in batches of 30 on reconnect |
+Single unified file: `firmware/esp8266_dht22.ino` — sends live readings when online,
+and buffers to flash (LittleFS) when offline.
 
 Buffered behavior: every 5 s the reading is sent live if possible, otherwise appended to
 `/buffer.csv` (`millis,temp,hum`, capped at ~2000 lines / ~2.7 h, oldest dropped first).
@@ -165,8 +160,8 @@ On reconnect the live reading goes first, then the backlog flushes via `POST /ap
 with each reading's `age` so the server reconstructs its timestamp. The buffer survives
 reboots; `backfilled` counts synced readings per device (visible in `GET /api/devices`).
 
-1. Open the `.ino` in Arduino IDE (libraries: `DHT sensor library`, `ArduinoJson`)
-2. Tools → Flash Size → a variant with filesystem (e.g. `4MB (FS:1MB ...)`) for the buffered version
+1. Open `firmware/esp8266_dht22.ino` in Arduino IDE (libraries: `DHT sensor library`, `ArduinoJson`)
+2. Tools → Flash Size → a variant with filesystem (e.g. `4MB (FS:1MB ...)`) so the offline buffer has space
 3. Set Wi-Fi credentials and `serverURL`
 4. **Set a unique `deviceId` per board before flashing:**
 
@@ -236,8 +231,8 @@ Offline logic: a device is marked offline when `now - lastSeen > 12000 ms`
 المشروع يراقب عدة أجهزة ESP8266 (حساس DHT22) لحظيًا: كل جهاز يرسل الحرارة والرطوبة
 كل 5 ثواني للسيرفر، والسيرفر يوزع التحديثات على الموبايل والمتصفح عبر SSE، مع كشف
 مستقل لكل جهاز عند توقفه وإشعارات Telegram اختيارية. لإضافة جهاز جديد يكفي تفليش
-نفس الكود مع `deviceId` مختلف — لا حاجة لتعديل السيرفر أو التطبيق. ونسخة `esp8266_buffered.ino` تخزن القراءات
-داخل ذاكرة الجهاز عند انقطاع الواي فاي وترسلها كلها تلقائيًا عند عودة الشبكة.
+نفس الكود مع `deviceId` مختلف — لا حاجة لتعديل السيرفر أو التطبيق. والـ firmware يخزن القراءات
+داخل ذاكرة الجهاز عند انقطاع الواي فاي ويرسلها كلها تلقائيًا عند عودة الشبكة.
 
 ## License
 
